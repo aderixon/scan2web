@@ -1,0 +1,95 @@
+#!/bin/bash
+# $Id: scan2web,v 1.9 2011/05/30 10:59:37 ajr Exp $
+#
+# Generate web-ready files from scanned originals
+
+OEXT='web'	# name to append to file
+SIZE=750	# final image size (default)
+QUALITY=80	# final image JPEG quality
+GAMMA='1.0'	# final image gamma adjustment
+LEVEL='3%'	# levels adjustment
+FUZZ='30%'	# fuzz on auto-cropping (trim)
+MASKOPACITY=30	# opacity of contrast mask
+MASKBLUR=15	# amount of blur applied to mask
+FILTER='sinc'	# filter type for resize
+#TONE='brown4'	# toning colour
+TONE='saddlebrown'	# toning colour
+TONEAMOUNT='8%'	# toning amount
+
+usage()
+{
+	echo "Usage: ${0##*/} [-c] [-f fuzz] [-g gamma] [-l level] [-m] [-o ext] [-r size] <file> [file ...]"
+	echo "	-c = local contrast enhancement (unsharp mask)"
+	echo "	-f = adjust fuzz percentage on edge trim (default: $FUZZ)"
+	echo "	-g = adjust gamma (default: $GAMMA)"
+	echo "	-l = auto levels percentage (default: $LEVEL)"
+	echo "	-m = apply contrast mask"
+	echo "	-o = output file suffix (default: -$OEXT)"
+	echo "	-r = output size (longest side, default: $SIZE)"
+}
+
+while getopts cf:g:hl:mo:r: a; do
+	case "$a" in
+	c)	CLARITY=1
+		;;
+	f)	FUZZ="${OPTARG}%"
+		;;
+	g)	GAMMA="${OPTARG}%"
+		;;
+	h)	usage
+		exit 0
+		;;
+	l)	LEVEL="${OPTARG}%"
+		;;
+	m)	MASK=1
+		;;
+	o)	OEXT="$OPTARG"
+		;;
+	r)	SIZE=$OPTARG
+		;;
+	*)	usage
+		exit 1
+		;;
+	esac
+done
+shift $((OPTIND - 1))
+
+if [ $SIZE -le 1500 ]; then
+	TSIZE=$((SIZE * 3))	# work on large image for small target image
+else
+	TSIZE=$SIZE
+fi
+
+if [ -n "$CLARITY" ]; then
+	CLARITYPARAM="-unsharp 50x7+0.4+0"
+fi
+for f in $@; do
+	basename="${f%.*}"
+	file="$f"
+
+	if [ -n "$MASK" ]; then
+		# create contrast mask
+		convert "$f" -colorspace GRAY -negate -gaussian $MASKBLUR "${basename}-inv.$$.tif"
+		#composite -dissolve $MASKOPACITY -compose overlay \
+		composite -compose overlay -dissolve $MASKOPACITY \
+		  "${basename}-inv.$$.tif" "$f" "${basename}-mask.$$.tif"
+		if [ -s "${basename}-mask.$$.tif" ]; then
+			file="${basename}-mask.$$.tif"
+		else
+			echo "${0##*/}: masking failed for $f, not done"
+		fi
+	fi
+	 # -bordercolor black -border 1x1 -fuzz "$FUZZ" -trim +repage \
+	convert -size ${TSIZE}x${TSIZE} "$file" \
+	  -normalize -level "$LEVEL" -gamma $GAMMA $CLARITYPARAM \
+	  -fuzz "$FUZZ" -trim +repage \
+	  -unsharp 0x1+1 \
+	  -filter ${FILTER} -resize ${SIZE}x${SIZE}\> \
+	  -unsharp 0x1+0.4+0.01 -quality $QUALITY +profile icm \
+	  -fill ${TONE} -colorize $TONEAMOUNT \
+	  "${basename}-${OEXT}.jpg"
+#	  -enhance -despeckle \
+	if [ -n "$MASK" ]; then
+		rm -f "${basename}-inv.$$.tif" "${basename}-mask.$$.tif"
+	fi
+done
