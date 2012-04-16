@@ -13,7 +13,7 @@ For example, assuming a full size scanned image file called crop0001.tif:
     $ ./scan2web crop0001.tif
 
 ...will produce a sharpened file with some automated contrast improvement
-called crop0001-web.jpg that is 750px on the longest edge.
+called `crop0001-web.jpg` that is 750px on the longest edge.
 
 scan2web is not a substitute for proper post-processing in an image
 editor; it is intended to quickly produce acceptable, "first cut" gallery
